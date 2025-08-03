@@ -1,0 +1,518 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Consulta NCM</title>
+    <!-- Inclui o Tailwind CSS para design moderno e responsivo -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+        body { font-family: 'Inter', sans-serif; }
+        [x-cloak] { display: none !important; }
+        .loading-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 2rem;
+            min-height: 100px;
+        }
+        .dot-pulse {
+            position: relative;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background-color: #3b82f6; /* Tailwind blue-500 */
+            color: #3b82f6;
+            animation: dot-pulse 1.5s infinite ease-in-out;
+        }
+        .dot-pulse::before, .dot-pulse::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            background-color: #3b82f6;
+            animation: dot-pulse-before 1.5s infinite ease-in-out;
+        }
+        .dot-pulse::before {
+            left: -20px;
+            animation: dot-pulse-before 1.5s infinite ease-in-out;
+        }
+        .dot-pulse::after {
+            left: 20px;
+            animation: dot-pulse-after 1.5s infinite ease-in-out;
+        }
+        @keyframes dot-pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(0.75); }
+            100% { transform: scale(1); }
+        }
+        @keyframes dot-pulse-before {
+            0% { transform: scale(1); }
+            50%, 100% { transform: scale(0.75); }
+        }
+        @keyframes dot-pulse-after {
+            0%, 50% { transform: scale(0.75); }
+            100% { transform: scale(1); }
+        }
+        /* Classe para esconder e mostrar detalhes com transição */
+        .details-content {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease-in-out;
+        }
+        /* Corrigido para uma altura máxima maior para evitar que o conteúdo seja cortado */
+        .details-content.open {
+            max-height: 2000px; /* Um valor alto o suficiente para acomodar o conteúdo */
+        }
+    </style>
+</head>
+<body class="bg-gray-50 text-gray-900 transition-colors duration-300 dark:bg-gray-900 dark:text-gray-50">
+    <div class="min-h-screen flex flex-col items-center p-4 md:p-8">
+
+        <!-- Cabeçalho -->
+        <header class="w-full max-w-4xl flex justify-between items-center mb-8">
+            <h1 class="text-3xl md:text-4xl font-bold text-blue-600 dark:text-blue-400">NCM Finder</h1>
+            <button id="theme-toggle" class="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-800 transition-colors duration-300">
+                <span id="light-icon" class="text-gray-900 dark:text-gray-50">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-moon-star"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/><path d="M19 3v4"/><path d="M21 5h-4"/></svg>
+                </span>
+                <span id="dark-icon" class="hidden text-gray-900 dark:text-gray-50">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-sun"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg>
+                </span>
+            </button>
+        </header>
+
+        <!-- Seção de busca com IA -->
+        <main class="w-full max-w-4xl bg-white dark:bg-gray-800 p-6 md:p-8 rounded-xl shadow-lg mb-8 transition-colors duration-300">
+            <h2 class="text-2xl font-semibold text-gray-800 dark:text-gray-200 mb-4">Busca Inteligente por Produto</h2>
+            <div class="flex flex-col md:flex-row gap-4 mb-6">
+                <input type="text" id="product-input" placeholder="Ex: Pão de forma, Biscoito Recheado..." class="flex-1 p-3 rounded-lg border border-gray-300 dark:border-gray-600 bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <button id="search-button" class="bg-blue-600 text-white font-semibold py-3 px-6 rounded-lg hover:bg-blue-700 transition-colors duration-300 shadow-md">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-sparkles inline-block mr-2"><path d="M9.91 19.34c-1.39 1.48-3.08 2.21-4.78 2.21-1.7 0-3.39-.73-4.78-2.21-1.4-1.48-2.12-3.23-2.12-5.08 0-1.85.72-3.6 2.12-5.08 1.39-1.48 3.08-2.21 4.78-2.21l1.71 1.83-1.71 1.83z"/><path d="M14.91 19.34c-1.39 1.48-3.08 2.21-4.78 2.21-1.7 0-3.39-.73-4.78-2.21-1.4-1.48-2.12-3.23-2.12-5.08 0-1.85.72-3.6 2.12-5.08 1.39-1.48 3.08-2.21 4.78-2.21l1.71 1.83-1.71 1.83z"/></svg>
+                    Buscar NCM com IA
+                </button>
+            </div>
+            <div id="ai-results" class="bg-gray-100 dark:bg-gray-700 p-4 rounded-lg min-h-[100px] transition-colors duration-300">
+                <p id="ai-placeholder" class="text-gray-500 dark:text-gray-400">Digite um produto e clique em "Buscar" para encontrar um NCM.</p>
+                <div id="loading-indicator" class="hidden loading-container">
+                    <div class="dot-pulse"></div>
+                </div>
+                <!-- Div para o conteúdo gerado pela IA -->
+                <div id="ai-results-content"></div>
+            </div>
+        </main>
+
+        <!-- Seção de navegação por categorias -->
+        <section class="w-full max-w-4xl bg-white dark:bg-gray-800 p-6 md:p-8 rounded-xl shadow-lg transition-colors duration-300">
+            <h2 class="text-2xl font-semibold text-gray-800 dark:text-gray-200 mb-4">Navegar por Categorias</h2>
+            <div id="ncm-categories">
+                <!-- Conteúdo NCM será renderizado aqui -->
+            </div>
+            <p class="text-sm mt-4 text-gray-500 dark:text-gray-400">
+                <span class="font-bold">ID do Usuário:</span> <span id="user-id">Carregando...</span>
+            </p>
+        </section>
+
+    </div>
+
+    <!-- Firebase SDKs -->
+    <!-- Inclui os ícones de Lucide JS no final do body para garantir o carregamento antes do script principal -->
+    <script src="https://cdn.jsdelivr.net/npm/lucide-js@latest/dist/umd/lucide.js"></script>
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, getDoc, setDoc, onSnapshot, collection } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // Variáveis globais para Firebase, fornecidas pelo ambiente do Canvas
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
+        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+
+        let app, db, auth, userId;
+
+        // Dados de NCM de exemplo para a demonstração
+        // Em uma aplicação real, estes dados seriam importados de uma API ou banco de dados
+        const sampleNCMs = {
+            "Alimentos e Bebidas": {
+                "Padaria e Confeitaria": [
+                    { "code": "1905.90.90", "description": "Produtos de panificação, pastelaria ou da indústria de bolachas e biscoitos, adicionados de chocolate ou de cacau em pó" },
+                    { "code": "1905.10.00", "description": "Pão de forma e pão de sal" },
+                    { "code": "1905.40.00", "description": "Torradas, pão tostado e produtos semelhantes" },
+                    { "code": "1905.31.00", "description": "Bolachas e biscoitos recheados ou com cobertura de chocolate" }
+                ],
+                "Mercearia": [
+                    { "code": "1602.50.00", "description": "Preparações e conservas de carne" },
+                    { "code": "2103.90.11", "description": "Molho de tomate preparado" },
+                    { "code": "2005.99.00", "description": "Outros produtos hortícolas preparados ou em conserva" },
+                    { "code": "2103.20.10", "description": "Ketchup e outros molhos de tomate" }
+                ],
+                "Laticínios": [
+                    {"code": "0406.10.10", "description": "Queijos frescos (não curados), incluindo queijo de soro"},
+                    {"code": "0403.10.00", "description": "Iogurte"},
+                    {"code": "0401.10.10", "description": "Leite e creme de leite, não concentrados, sem adição de açúcar"},
+                ]
+            },
+            "Eletrônicos": {
+                "Aparelhos de Som e Imagem": [
+                    { "code": "8518.29.90", "description": "Outros alto-falantes de uso profissional" },
+                    { "code": "8518.30.00", "description": "Fones de ouvido e microfones" },
+                    {"code": "8528.71.19", "description": "Outros aparelhos de recepção para radiodifusão ou televisão"},
+                    {"code": "8521.90.10", "description": "Aparelhos de gravação ou reprodução de vídeo"},
+                ],
+                "Informática": [
+                    { "code": "8471.50.10", "description": "Unidades de processamento, de pequeno porte, que permitem a expansão da capacidade" },
+                    { "code": "8471.60.52", "description": "Mouse" },
+                    {"code": "8471.70.12", "description": "Unidades de memória de disco flexível"},
+                    {"code": "8471.30.12", "description": "Microcomputadores portáteis, de peso inferior a 1 kg"},
+                ]
+            },
+            "Agricultura e Pecuária": {
+                "Produtos Agrícolas": [
+                    {"code": "0709.99.00", "description": "Outros produtos hortícolas frescos ou refrigerados"},
+                    {"code": "1001.99.90", "description": "Outros trigos e misturas de trigo e centeio"},
+                    {"code": "0702.00.00", "description": "Tomates frescos ou refrigerados"},
+                    {"code": "0901.11.10", "description": "Café não torrado, não descafeinado"},
+                ],
+                "Produtos de Origem Animal": [
+                    {"code": "0406.10.10", "description": "Queijos frescos (não curados), incluindo queijo de soro"},
+                    {"code": "0207.14.00", "description": "Pedaços e miudezas de galos e galinhas"},
+                    {"code": "0102.21.90", "description": "Bovinos vivos, da espécie doméstica, puros de reprodução"},
+                ]
+            },
+            "Indústria Têxtil": {
+                "Vestuário": [
+                    {"code": "6109.10.00", "description": "Camisetas de algodão, de malha"},
+                    {"code": "6203.22.00", "description": "Casacos, jaquetas, calças, jardineiras, bermudas e shorts de algodão"},
+                    {"code": "6104.41.00", "description": "Vestidos de lã ou de pelos finos, de malha"},
+                ],
+                "Fibras e Tecidos": [
+                    {"code": "5201.00.00", "description": "Algodão não cardado nem penteado"},
+                    {"code": "5801.37.00", "description": "Veludos e pelúcias tecidos, de outras matérias têxteis"},
+                    {"code": "5903.90.00", "description": "Tecidos impregnados, revestidos, recobertos ou estratificados"},
+                ]
+            }
+        };
+
+        // --- Configuração e Autenticação do Firebase ---
+        async function setupFirebase() {
+            try {
+                if (Object.keys(firebaseConfig).length > 0) {
+                    app = initializeApp(firebaseConfig);
+                    db = getFirestore(app);
+                    auth = getAuth(app);
+
+                    // Verifica se há um token inicial e autentica
+                    if (initialAuthToken) {
+                        await signInWithCustomToken(auth, initialAuthToken);
+                    } else {
+                        await signInAnonymously(auth);
+                    }
+
+                    // Listener para o estado de autenticação
+                    onAuthStateChanged(auth, (user) => {
+                        if (user) {
+                            userId = user.uid;
+                            console.log("Usuário autenticado com UID:", userId);
+                            document.getElementById('user-id').textContent = userId;
+                            // Inicia a função de renderização após a autenticação
+                            renderNCMs();
+                        } else {
+                            console.error("Erro na autenticação. Tentando novamente...");
+                            document.getElementById('user-id').textContent = "Falha na autenticação.";
+                        }
+                    });
+                } else {
+                    console.error("Configuração do Firebase não encontrada. O app não funcionará corretamente com o Firestore.");
+                    // Renderiza com dados de exemplo se o Firebase não estiver configurado
+                    renderNCMsFromData(sampleNCMs);
+                }
+            } catch (error) {
+                console.error("Erro ao configurar o Firebase:", error);
+                renderNCMsFromData(sampleNCMs);
+            }
+        }
+
+        // --- Funções de Lógica da Aplicação ---
+        async function getOrCreateNCMs() {
+            const ncmCollectionRef = collection(db, 'artifacts', appId, 'public', 'data', 'ncm_data');
+            const ncmDocRef = doc(ncmCollectionRef, 'current_ncms');
+
+            try {
+                const docSnap = await getDoc(ncmDocRef);
+                if (docSnap.exists()) {
+                    console.log("Dados de NCM encontrados no Firestore.");
+                    return docSnap.data().data;
+                } else {
+                    console.log("Nenhum dado de NCM encontrado. Criando um documento com dados de exemplo.");
+                    await setDoc(ncmDocRef, { data: sampleNCMs });
+                    return sampleNCMs;
+                }
+            } catch (e) {
+                console.error("Erro ao buscar ou criar NCMs no Firestore:", e);
+                return sampleNCMs;
+            }
+        }
+
+        function renderNCMsFromData(data) {
+            const categoriesContainer = document.getElementById('ncm-categories');
+            categoriesContainer.innerHTML = '';
+
+            for (const category in data) {
+                const categoryDiv = document.createElement('div');
+                categoryDiv.className = 'border-b border-gray-200 dark:border-gray-700 py-4';
+                categoryDiv.innerHTML = `
+                    <div class="flex justify-between items-center cursor-pointer group" onclick="toggleAccordion(this)">
+                        <h3 class="text-xl font-medium text-blue-600 dark:text-blue-400 group-hover:underline">${category}</h3>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-chevron-down transform transition-transform duration-200 group-hover:rotate-180"><path d="m6 9 6 6 6-6"/></svg>
+                    </div>
+                    <div class="accordion-content overflow-hidden max-h-0 transition-max-height duration-300 ease-in-out">
+                        <div class="mt-4 pl-4 border-l-2 border-gray-300 dark:border-gray-600">
+                            ${Object.entries(data[category]).map(([subcat, ncms]) => `
+                                <div class="mb-4">
+                                    <h4 class="font-semibold text-gray-700 dark:text-gray-300">${subcat}</h4>
+                                    <ul class="list-disc list-inside mt-2 space-y-1">
+                                        ${ncms.map(ncm => `
+                                            <li class="text-sm text-gray-600 dark:text-gray-400">
+                                                <div class="flex items-center justify-between">
+                                                    <div>
+                                                        <strong>${ncm.code}</strong> - ${ncm.description}
+                                                    </div>
+                                                    <div class="flex items-center gap-2">
+                                                        <button class="copy-button bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 text-xs font-semibold py-1 px-3 rounded-full hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors duration-300" onclick="copyNcmCode(event, '${ncm.code}')">
+                                                            Copiar
+                                                        </button>
+                                                        <button class="bg-purple-600 text-white text-xs font-semibold py-1 px-3 rounded-full hover:bg-purple-700 transition-colors duration-300" onclick="getNcmDetailsWithAI(event, '${ncm.code}', '${ncm.description.replace(/'/g, "\\'").replace(/"/g, "\\\"")}')">
+                                                            ✨ Detalhes com IA
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                                <div id="details-${ncm.code}" class="details-content mt-2 text-gray-700 dark:text-gray-300 bg-gray-50 dark:bg-gray-700 p-3 rounded-md">
+                                                    <!-- Conteúdo dos detalhes da IA será inserido aqui -->
+                                                </div>
+                                            </li>
+                                        `).join('')}
+                                    </ul>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                `;
+                categoriesContainer.appendChild(categoryDiv);
+            }
+        }
+
+        async function renderNCMs() {
+             if (db) {
+                const ncmCollectionRef = collection(db, 'artifacts', appId, 'public', 'data', 'ncm_data');
+                const ncmDocRef = doc(ncmCollectionRef, 'current_ncms');
+
+                // Listener em tempo real usando onSnapshot
+                onSnapshot(ncmDocRef, (docSnap) => {
+                    if (docSnap.exists()) {
+                        const ncms = docSnap.data().data;
+                        renderNCMsFromData(ncms);
+                    } else {
+                        // Se o documento não existir, o criamos com os dados de exemplo
+                        setDoc(ncmDocRef, { data: sampleNCMs });
+                    }
+                }, (error) => {
+                    console.error("Erro ao buscar dados do Firestore:", error);
+                    renderNCMsFromData(sampleNCMs);
+                });
+            } else {
+                renderNCMsFromData(sampleNCMs);
+            }
+        }
+
+        window.toggleAccordion = function(element) {
+            const content = element.nextElementSibling;
+            if (content.style.maxHeight) {
+                content.style.maxHeight = null;
+            } else {
+                content.style.maxHeight = content.scrollHeight + "px";
+            }
+        };
+
+        // Função para copiar o código NCM
+        window.copyNcmCode = function(event, ncmCode) {
+            // Cria um campo de texto temporário
+            const tempInput = document.createElement('textarea');
+            tempInput.value = ncmCode;
+            document.body.appendChild(tempInput);
+            tempInput.select();
+            document.execCommand('copy');
+            document.body.removeChild(tempInput);
+            
+            // Feedback visual
+            const button = event.currentTarget;
+            const originalText = button.textContent;
+            button.textContent = 'Copiado!';
+            setTimeout(() => {
+                button.textContent = originalText;
+            }, 2000);
+        }
+
+        // Nova função para buscar detalhes do NCM com IA
+        window.getNcmDetailsWithAI = async function(event, code, description) {
+            event.stopPropagation(); // Evita que o acordeão seja fechado
+            const detailsDiv = document.getElementById(`details-${code}`);
+            
+            // Toggle do estado de abertura
+            const isOpened = detailsDiv.classList.contains('open');
+            if (isOpened) {
+                detailsDiv.classList.remove('open');
+                detailsDiv.innerHTML = '';
+                return;
+            }
+
+            detailsDiv.innerHTML = '<div class="loading-container"><div class="dot-pulse"></div></div>';
+            detailsDiv.classList.add('open');
+
+            const prompt = `Forneça uma explicação detalhada e completa da NCM ${code} - "${description}". Inclua exemplos de produtos comuns que se encaixam nesta classificação. Se a descrição for genérica, explique as nuances que a tornam aplicável a diferentes tipos de produtos. Formate a resposta em parágrafos de texto simples.`;
+
+            try {
+                const chatHistory = [];
+                chatHistory.push({ role: "user", parts: [{ text: prompt }] });
+                const payload = {
+                    contents: chatHistory,
+                };
+                const apiKey = "";
+                const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
+
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                if (!response.ok) {
+                    throw new Error(`Erro de HTTP! status: ${response.status}`);
+                }
+
+                const result = await response.json();
+                const text = result?.candidates?.[0]?.content?.parts?.[0]?.text;
+
+                if (text) {
+                    detailsDiv.innerHTML = `<p>${text.replace(/\n/g, '<br><br>')}</p>`;
+                } else {
+                    detailsDiv.innerHTML = `<p class="text-red-500">Não foi possível obter detalhes. Tente novamente.</p>`;
+                }
+            } catch (error) {
+                console.error("Erro ao chamar a API do Gemini para detalhes:", error);
+                detailsDiv.innerHTML = `<p class="text-red-500">Erro na comunicação com a IA. Por favor, tente novamente mais tarde.</p>`;
+            }
+        }
+
+        // --- Funções de busca com IA ---
+        async function searchWithAI(productName) {
+            const loadingIndicator = document.getElementById('loading-indicator');
+            const aiPlaceholder = document.getElementById('ai-placeholder');
+            const aiResultsContentDiv = document.getElementById('ai-results-content');
+            
+            // Adiciona verificações para garantir que os elementos existem
+            if (!loadingIndicator || !aiResultsContentDiv) {
+                console.error("Elementos críticos para a busca com IA estão faltando.");
+                return;
+            }
+
+            // Esconde o placeholder e mostra o indicador de carregamento
+            if (aiPlaceholder) aiPlaceholder.classList.add('hidden');
+            loadingIndicator.classList.remove('hidden');
+            aiResultsContentDiv.innerHTML = ''; // Limpa o conteúdo da div de resultados
+
+            const prompt = `Considerando a base de dados de NCMs do Brasil, me forneça o código NCM mais provável e uma breve descrição para o seguinte produto: "${productName}". Se o produto for genérico, liste algumas opções. Responda em formato de lista simples com o código NCM e a descrição. Exemplo: "NCM: 1905.90.90 - Produtos de panificação."`;
+
+            try {
+                // Configuração da chamada à API do Gemini
+                const chatHistory = [];
+                chatHistory.push({ role: "user", parts: [{ text: prompt }] });
+                const payload = {
+                    contents: chatHistory,
+                };
+                const apiKey = "";
+                const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
+
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                if (!response.ok) {
+                    throw new Error(`Erro de HTTP! status: ${response.status}`);
+                }
+
+                const result = await response.json();
+                const text = result?.candidates?.[0]?.content?.parts?.[0]?.text;
+
+                if (text) {
+                    const results = text.split('\n');
+                    let resultsHtml = `<p class="font-semibold text-lg text-gray-800 dark:text-gray-200">Resultados da IA:</p>`;
+                    results.forEach(line => {
+                        const match = line.match(/NCM: ([\d.]+) - (.+)/);
+                        if (match) {
+                            const ncmCode = match[1];
+                            const description = match[2];
+                            resultsHtml += `
+                                <div class="flex flex-col md:flex-row md:items-center justify-between p-2 mt-2 rounded-lg bg-gray-50 dark:bg-gray-700">
+                                    <p class="text-gray-600 dark:text-gray-300"><strong>${ncmCode}</strong> - ${description}</p>
+                                    <button class="copy-button bg-gray-200 dark:bg-gray-600 text-gray-800 dark:text-gray-200 text-xs font-semibold py-1 px-3 mt-2 md:mt-0 rounded-full hover:bg-gray-300 dark:hover:bg-gray-500 transition-colors duration-300" onclick="copyNcmCode(event, '${ncmCode}')">
+                                        Copiar
+                                    </button>
+                                </div>
+                            `;
+                        }
+                    });
+                    aiResultsContentDiv.innerHTML = resultsHtml;
+                } else {
+                    aiResultsContentDiv.innerHTML = `<p class="text-red-500">Não foi possível gerar uma resposta. Tente novamente.</p>`;
+                }
+            } catch (error) {
+                console.error("Erro ao chamar a API do Gemini:", error);
+                aiResultsContentDiv.innerHTML = `<p class="text-red-500">Erro na comunicação com a IA. Por favor, tente novamente mais tarde.</p>`;
+            } finally {
+                loadingIndicator.classList.add('hidden');
+            }
+        }
+
+        // --- Event Listeners e Inicialização ---
+        document.getElementById('theme-toggle').addEventListener('click', () => {
+            document.body.classList.toggle('dark');
+            const isDarkMode = document.body.classList.contains('dark');
+            const lightIcon = document.getElementById('light-icon');
+            const darkIcon = document.getElementById('dark-icon');
+
+            if (isDarkMode) {
+                lightIcon.classList.add('hidden');
+                darkIcon.classList.remove('hidden');
+            } else {
+                lightIcon.classList.remove('hidden');
+                darkIcon.classList.add('hidden');
+            }
+        });
+
+        document.getElementById('search-button').addEventListener('click', () => {
+            const productName = document.getElementById('product-input').value;
+            if (productName.trim() !== '') {
+                searchWithAI(productName);
+            }
+        });
+
+        document.getElementById('product-input').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                document.getElementById('search-button').click();
+            }
+        });
+
+        // Chama as funções de inicialização diretamente
+        if (typeof lucide !== 'undefined') {
+            lucide.createIcons();
+        }
+        setupFirebase();
+    </script>
+</body>
+</html>
