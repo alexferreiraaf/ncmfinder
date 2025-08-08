@@ -1,117 +1,819 @@
 <!DOCTYPE html>
-<html lang="pt-br">
+<html lang="pt-BR">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Busca de NCM com IA</title>
-  <script>
-    const OPENAI_API_KEY = "AIzaSyAgjcZ54zXIC8jkgpzquVMTtLws-L7JXxw"; // Substitua por sua chave
-  </script>
-  <script src="https://cdn.tailwindcss.com"></script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Consulta NCM</title>
+    <!-- Inclui o Tailwind CSS para design moderno e responsivo -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+        body { font-family: 'Inter', sans-serif; }
+        [x-cloak] { display: none !important; }
+        
+        .bg-gradient-header {
+            background-image: linear-gradient(to right, #4338CA, #6D28D9);
+        }
+        
+        .loading-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 2rem;
+            min-height: 100px;
+        }
+        .dot-pulse {
+            position: relative;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background-color: #4338CA; /* Tailwind indigo-600 */
+            color: #4338CA;
+            animation: dot-pulse 1.5s infinite ease-in-out;
+        }
+        .dot-pulse::before, .dot-pulse::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            background-color: #4338CA;
+            animation: dot-pulse-before 1.5s infinite ease-in-out;
+        }
+        .dot-pulse::before {
+            left: -20px;
+            animation: dot-pulse-before 1.5s infinite ease-in-out;
+        }
+        .dot-pulse::after {
+            left: 20px;
+            animation: dot-pulse-after 1.5s infinite ease-in-out;
+        }
+        @keyframes dot-pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(0.75); }
+            100% { transform: scale(1); }
+        }
+        @keyframes dot-pulse-before {
+            0% { transform: scale(1); }
+            50%, 100% { transform: scale(0.75); }
+        }
+        @keyframes dot-pulse-after {
+            0%, 50% { transform: scale(0.75); }
+            100% { transform: scale(1); }
+        }
+
+        /* Classes para esconder e mostrar detalhes com transição e altura dinâmica */
+        .details-content {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .details-content.open {
+            max-height: 5000px; /* Um valor alto o suficiente para acomodar o conteúdo */
+        }
+        .ai-result-list {
+            list-style-type: none;
+            padding: 0;
+        }
+        .ai-result-list li {
+            padding: 0.5rem 0;
+        }
+    </style>
 </head>
-<body class="bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-100 min-h-screen flex flex-col items-center justify-center p-6 transition-colors duration-300">
-  <div class="absolute top-4 right-4">
-    <button id="theme-toggle" class="bg-gray-300 dark:bg-gray-700 text-gray-800 dark:text-gray-200 px-4 py-2 rounded hover:bg-gray-400 dark:hover:bg-gray-600 transition">
-      🌞/🌙 Alternar Tema
-    </button>
-  </div>
+<body class="bg-gray-900 text-gray-100 transition-colors duration-300">
+    <div class="min-h-screen flex flex-col items-center p-4 md:p-8">
 
-  <div class="max-w-xl w-full">
-    <h1 class="text-2xl font-bold mb-4 text-center">Consulta NCM com IA</h1>
-    <div class="mb-4">
-      <label for="product-name" class="block mb-2 font-medium">Nome do Produto:</label>
-      <input id="product-name" type="text" class="w-full p-2 border border-gray-300 rounded-lg text-gray-900" placeholder="Ex: Bolo de chocolate" />
+        <!-- Botão flutuante para alternar tema foi removido -->
+
+        <!-- Cabeçalho -->
+        <header class="w-full max-w-4xl flex flex-col items-center mb-8 p-6 bg-gradient-header rounded-xl shadow-lg transition-colors duration-300">
+            <div class="w-full flex justify-center items-center mb-4">
+                <h1 class="text-3xl md:text-4xl font-bold text-white">NCM Finder</h1>
+            </div>
+            <p class="text-white/80 text-center md:text-left text-sm">Pesquise NCMs de forma inteligente ou navegue por categorias para encontrar o que precisa.</p>
+        </header>
+
+        <!-- Seção de busca por produto -->
+        <main class="w-full max-w-4xl bg-gray-800 p-6 md:p-8 rounded-xl shadow-lg mb-8 transition-colors duration-300">
+            <h2 class="text-2xl font-semibold text-gray-200 mb-4">Busca por Produto</h2>
+            <div class="flex flex-col md:flex-row gap-4 mb-4">
+                <input type="text" id="product-input" placeholder="Ex: Pão de forma, Biscoito Recheado..." class="flex-1 p-3 rounded-lg border border-gray-600 bg-gray-700 text-gray-100 focus:outline-none focus:ring-2 focus:ring-purple-500">
+                
+                <button id="search-button-ai" class="bg-purple-600 text-white font-semibold py-3 px-6 rounded-lg hover:bg-purple-700 transition-colors duration-300 shadow-md">
+                    Buscar com IA ✨
+                </button>
+            </div>
+            <div id="search-results" class="bg-gray-700 p-4 rounded-lg min-h-[100px] transition-colors duration-300">
+                <p id="search-placeholder" class="text-gray-400">Digite um produto e clique em "Buscar" para encontrar um NCM.</p>
+                <div id="loading-indicator" class="hidden loading-container">
+                    <div class="dot-pulse"></div>
+                </div>
+            </div>
+        </main>
+
+        <!-- Seção de navegação por categorias -->
+        <section class="w-full max-w-4xl bg-gray-800 p-6 md:p-8 rounded-xl shadow-lg transition-colors duration-300">
+            <h2 class="text-2xl font-semibold text-gray-200 mb-4">Navegar por Capítulos</h2>
+            <div id="ncm-categories">
+                <!-- Conteúdo NCM será renderizado aqui -->
+            </div>
+            <p class="text-sm mt-4 text-gray-400">
+                <span class="font-bold">ID do Usuário:</span> <span id="user-id">Carregando...</span>
+            </p>
+        </section>
+
     </div>
-    <div class="flex justify-end mb-6">
-      <button onclick="searchWithAI(document.getElementById('product-name').value)" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition">Buscar NCM</button>
-    </div>
 
-    <div id="loading-indicator" class="hidden text-center text-blue-600 mb-4">Consultando IA...</div>
+    <!-- Firebase SDKs -->
+    <!-- Inclui os ícones de Lucide JS no final do body para garantir o carregamento antes do script principal -->
+    <script src="https://cdn.jsdelivr.net/npm/lucide-js@latest/dist/umd/lucide.js"></script>
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, getDoc, setDoc, onSnapshot, collection } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-    <div id="ai-placeholder" class="text-center text-gray-500">Os resultados aparecerão aqui após a consulta.</div>
+        // Variáveis globais para Firebase, fornecidas pelo ambiente do Canvas
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
+        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
 
-    <div id="ai-results-content" class="space-y-2"></div>
-  </div>
+        let app, db, userId;
+        
+        // **IMPORTANTE:** Insira sua chave de API do Google AI Studio aqui para habilitar a IA
+        const apiKey = "AIzaSyAgjcZ54zXIC8jkgpzquVMTtLws-L7JXxw"; 
 
-  <script>
-    // Alternar tema claro/escuro
-    const toggleBtn = document.getElementById('theme-toggle');
-    toggleBtn.addEventListener('click', () => {
-      document.documentElement.classList.toggle('dark');
-    });
+        // Dados de NCM de exemplo para a demonstração
+        const sampleNCMs = {
+            "01. Animais vivos": [
+                { "code": "0102.21.90", "description": "Bovinos vivos, da espécie doméstica, puros de reprodução" },
+                { "code": "0103.92.00", "description": "Suínos, exceto puros de reprodução, de peso igual ou superior a 50 kg" }
+            ],
+            "02. Carnes e miudezas comestíveis": [
+                { "code": "0207.14.00", "description": "Pedaços e miudezas de galos e galinhas" },
+                { "code": "0201.20.90", "description": "Outras carnes de animais da espécie bovina" }
+            ],
+            "03. Peixes e crustáceos": [
+                { "code": "0304.48.00", "description": "Filés de peixes frescos ou refrigerados" },
+                { "code": "0306.17.90", "description": "Camarões inteiros ou em pedaços" }
+            ],
+            "04. Leite e laticínios": [
+                { "code": "0406.10.10", "description": "Queijos frescos (não curados), incluindo queijo de soro" },
+                { "code": "0403.10.00", "description": "Iogurte" }
+            ],
+            "05. Outros produtos de origem animal": [
+                { "code": "0505.10.00", "description": "Penas e penugem de galos e galinhas" },
+                { "code": "0506.10.00", "description": "Ossos e chifres não trabalhados" }
+            ],
+            "06. Plantas vivas e produtos de floricultura": [
+                { "code": "0602.90.90", "description": "Outras plantas vivas" },
+                { "code": "0603.11.00", "description": "Rosas frescas" }
+            ],
+            "07. Produtos hortícolas, plantas, raízes e tubérculos": [
+                { "code": "0709.99.00", "description": "Outros produtos hortícolas frescos ou refrigerados" },
+                { "code": "0702.00.00", "description": "Tomates frescos ou refrigerados" }
+            ],
+            "08. Frutas e nozes": [
+                { "code": "0805.10.00", "description": "Laranjas, frescas ou secas" },
+                { "code": "0808.10.00", "description": "Maçãs, frescas" }
+            ],
+            "09. Café, chá, especiarias": [
+                { "code": "0901.11.10", "description": "Café não torrado, não descafeinado" },
+                { "code": "0902.10.00", "description": "Chá verde (não fermentado)" }
+            ],
+            "10. Cereais": [
+                { "code": "1001.99.90", "description": "Outros trigos e misturas de trigo e centeio" },
+                { "code": "1006.30.21", "description": "Arroz semibranqueado ou branqueado, mesmo polido ou glaciado" }
+            ],
+            "11. Produtos da indústria de moagem": [
+                { "code": "1101.00.10", "description": "Farinha de trigo, de milho" },
+                { "code": "1108.12.00", "description": "Fécula de milho (amido de milho)" }
+            ],
+            "12. Sementes e frutos oleaginosos": [
+                { "code": "1202.42.00", "description": "Amendoim, mesmo descascado, quebrado" },
+                { "code": "1207.29.90", "description": "Outras sementes de algodão" }
+            ],
+            "13. Gomas, resinas, e outros sucos e extratos vegetais": [
+                { "code": "1301.90.90", "description": "Outras gomas e resinas naturais" },
+                { "code": "1302.19.90", "description": "Outros sucos e extratos vegetais" }
+            ],
+            "14. Matérias para cestaria": [
+                { "code": "1401.90.00", "description": "Outras matérias vegetais" },
+                { "code": "1404.90.00", "description": "Outras matérias vegetais não especificadas" }
+            ],
+            "15. Gorduras e óleos animais ou vegetais": [
+                { "code": "1509.10.00", "description": "Azeite de oliva virgem" },
+                { "code": "1512.11.00", "description": "Óleo de girassol em bruto" }
+            ],
+            "16. Preparações de carne, de peixes": [
+                { "code": "1602.50.00", "description": "Preparações e conservas de carne" },
+                { "code": "1604.14.10", "description": "Atuns, em azeite, óleos ou vinagres" }
+            ],
+            "17. Açúcares e produtos de confeitaria": [
+                { "code": "1701.99.00", "description": "Outros açúcares de cana ou de beterraba" },
+                { "code": "1704.90.90", "description": "Outros produtos de confeitaria sem cacau" }
+            ],
+            "18. Cacau e suas preparações": [
+                { "code": "1806.90.00", "description": "Outros chocolates e outras preparações alimentícias que contenham cacau" }
+            ],
+            "19. Preparações de cereais, farinhas, amidos": [
+                { "code": "1905.90.90", "description": "Produtos de panificação, pastelaria ou da indústria de bolachas" },
+                { "code": "1905.31.00", "description": "Bolachas e biscoitos recheados" }
+            ],
+            "20. Preparações de produtos hortícolas, de frutas": [
+                { "code": "2005.99.00", "description": "Outros produtos hortícolas preparados ou em conserva" },
+                { "code": "2007.99.90", "description": "Outras geleias, doces de frutas, etc." }
+            ],
+            "21. Preparações alimentícias diversas": [
+                { "code": "2103.90.11", "description": "Molho de tomate preparado" },
+                { "code": "2103.20.10", "description": "Ketchup e outros molhos de tomate" }
+            ],
+            "22. Bebidas, líquidos alcoólicos e vinagres": [
+                { "code": "2204.21.00", "description": "Vinhos de uvas frescas, em recipientes de capacidade não superior a 2 litros" },
+                { "code": "2208.90.00", "description": "Outros líquidos fermentados ou destilados" }
+            ],
+            "23. Resíduos e desperdícios das indústrias alimentares": [
+                { "code": "2309.90.90", "description": "Outras preparações de uso na alimentação de animais" }
+            ],
+            "24. Tabaco e seus sucedâneos manufaturados": [
+                { "code": "2402.20.00", "description": "Cigarros" },
+                { "code": "2403.99.90", "description": "Outros tabacos manufaturados" }
+            ],
+            "25. Sal, enxofre, pedras e terras": [
+                { "code": "2501.00.11", "description": "Sal de cozinha (sal de mesa), refinado" },
+                { "code": "2505.90.00", "description": "Outras areias naturais" }
+            ],
+            "26. Minérios, escórias e cinzas": [
+                { "code": "2601.11.00", "description": "Minérios de ferro e seus concentrados" },
+                { "code": "2616.90.00", "description": "Minérios de prata e seus concentrados" }
+            ],
+            "27. Combustíveis minerais, óleos minerais": [
+                { "code": "2710.19.32", "description": "Óleos lubrificantes, com aditivos" },
+                { "code": "2716.00.00", "description": "Energia elétrica" }
+            ],
+            "28. Produtos químicos inorgânicos": [
+                { "code": "2811.22.10", "description": "Dióxido de silício" },
+                { "code": "2833.25.00", "description": "Sulfato de cobre" }
+            ],
+            "29. Produtos químicos orgânicos": [
+                { "code": "2905.11.00", "description": "Metanol (álcool metílico)" },
+                { "code": "2915.21.00", "description": "Ácido acético" }
+            ],
+            "30. Produtos farmacêuticos": [
+                { "code": "3004.90.99", "description": "Outros medicamentos, dosados" },
+                { "code": "3005.10.90", "description": "Outros adesivos, ligaduras, etc." }
+            ],
+            "31. Adubos (fertilizantes)": [
+                { "code": "3102.10.10", "description": "Ureia" },
+                { "code": "3105.20.00", "description": "Adubos minerais ou químicos, com os três elementos fertilizantes: nitrogênio, fósforo e potássio" }
+            ],
+            "32. Extratos tanantes e tintoriais": [
+                { "code": "3204.17.00", "description": "Pigmentos e outras preparações à base de pigmentos" },
+                { "code": "3208.90.39", "description": "Outras tintas e vernizes, à base de polímeros acrílicos" }
+            ],
+            "33. Óleos essenciais e resinoides": [
+                { "code": "3304.99.10", "description": "Cremes de beleza e loções" },
+                { "code": "3305.10.00", "description": "Xampus" }
+            ],
+            "34. Sabões, detergentes, lubrificantes": [
+                { "code": "3401.19.00", "description": "Sabões, sabonetes, detergentes orgânicos de superfície" },
+                { "code": "3402.20.00", "description": "Preparações tensoativas, de lavar" }
+            ],
+            "35. Matérias albuminoides": [
+                { "code": "3505.10.00", "description": "Dextrina e outros amidos modificados" },
+                { "code": "3506.10.90", "description": "Outras colas e adesivos" }
+            ],
+            "36. Pólvoras e explosivos": [
+                { "code": "3606.10.00", "description": "Ferrocerio e outras ligas pirofóricas" }
+            ],
+            "37. Produtos para fotografia ou cinematografia": [
+                { "code": "3701.10.10", "description": "Chapas e filmes planos para fotografia" },
+                { "code": "3702.10.10", "description": "Filmes cinematográficos" }
+            ],
+            "38. Produtos diversos das indústrias químicas": [
+                { "code": "3808.94.19", "description": "Outros desinfetantes" },
+                { "code": "3820.00.00", "description": "Preparados anticongelantes e líquidos para descongelar" }
+            ],
+            "39. Plásticos e suas obras": [
+                { "code": "3924.90.00", "description": "Outros artigos de uso doméstico e artigos de higiene ou de toucador, de plástico" },
+                { "code": "3926.90.90", "description": "Outras obras de plástico" }
+            ],
+            "40. Borracha e suas obras": [
+                { "code": "4011.10.00", "description": "Pneus novos de borracha, dos tipos utilizados em automóveis de passageiros" },
+                { "code": "4016.99.90", "description": "Outras obras de borracha vulcanizada" }
+            ],
+            "41. Peles em bruto, couros": [
+                { "code": "4101.90.00", "description": "Peles em bruto de bovinos, exceto puros de reprodução" },
+                { "code": "4102.10.00", "description": "Peles de ovinos em bruto, com lã, não depiladas" }
+            ],
+            "42. Obras de couro": [
+                { "code": "4202.11.00", "description": "Malas e maletas de viagem, de couro natural" },
+                { "code": "4203.10.00", "description": "Vestuário de couro natural" }
+            ],
+            "43. Peles com pelo e suas obras": [
+                { "code": "4301.90.00", "description": "Outras peles com pelo em bruto" }
+            ],
+            "44. Madeira, carvão vegetal e obras de madeira": [
+                { "code": "4407.10.00", "description": "Madeira serrada ou fendida longitudinalmente" },
+                { "code": "4408.10.00", "description": "Folhas para folheados de coníferas" }
+            ],
+            "45. Cortiça e suas obras": [
+                { "code": "4503.10.00", "description": "Rolhas e cápsulas de cortiça natural" }
+            ],
+            "46. Obras de esparto ou de outras matérias para cestaria": [
+                { "code": "4602.19.00", "description": "Outras obras de esparto, vime, cana-de-açúcar, etc." }
+            ],
+            "47. Pastas de madeira ou de outras matérias fibrosas celulósicas": [
+                { "code": "4703.21.00", "description": "Pastas químicas de madeira, semibranqueadas ou branqueadas" }
+            ],
+            "48. Papel e cartão; obras de pasta de celulose": [
+                { "code": "4802.56.10", "description": "Papel e cartão para escrita, impressão ou outros fins gráficos" },
+                { "code": "4811.51.10", "description": "Papel e cartão revestidos de plástico, com peso superior a 150 g/m²" }
+            ],
+            "49. Livros, jornais, gravuras, etc.": [
+                { "code": "4901.99.00", "description": "Outros livros, brochuras e impressos semelhantes" }
+            ],
+            "50. Seda": [
+                { "code": "5007.20.00", "description": "Tecidos de seda ou de desperdícios de seda" }
+            ],
+            "51. Lã, pelos finos ou grosseiros de animais": [
+                { "code": "5105.10.00", "description": "Lã cardada ou penteada" }
+            ],
+            "52. Algodão": [
+                { "code": "5201.00.00", "description": "Algodão não cardado nem penteado" },
+                { "code": "5205.11.00", "description": "Fios de algodão com um teor de algodão superior ou igual a 85%" }
+            ],
+            "53. Outras fibras têxteis vegetais": [
+                { "code": "5307.10.10", "description": "Fios de juta ou de outras fibras têxteis" }
+            ],
+            "54. Filamentos sintéticos ou artificiais": [
+                { "code": "5402.33.00", "description": "Fios de filamentos de poliéster, texturizados" }
+            ],
+            "55. Fibras sintéticas ou artificiais, descontínuas": [
+                { "code": "5509.53.00", "description": "Fios de fibras sintéticas" }
+            ],
+            "56. Pastas, feltros e falsos tecidos": [
+                { "code": "5603.94.90", "description": "Outros falsos tecidos de peso superior a 150 g/m²" }
+            ],
+            "57. Tapetes e outros revestimentos para pavimentos": [
+                { "code": "5703.20.00", "description": "Tapetes de náilon ou de outras poliamidas" }
+            ],
+            "58. Tecidos especiais; tecidos tufados; rendas": [
+                { "code": "5801.37.00", "description": "Veludos e pelúcias tecidos, de outras matérias têxteis" }
+            ],
+            "59. Tecidos impregnados, revestidos, recobertos": [
+                { "code": "5903.90.00", "description": "Tecidos impregnados, revestidos, recobertos ou estratificados" }
+            ],
+            "60. Tecidos de malha": [
+                { "code": "6005.32.00", "description": "Outros tecidos de malha de algodão" }
+            ],
+            "61. Vestuário e seus acessórios, de malha": [
+                { "code": "6109.10.00", "description": "Camisetas de algodão, de malha" },
+                { "code": "6104.41.00", "description": "Vestidos de lã ou de pelos finos, de malha" }
+            ],
+            "62. Vestuário e seus acessórios, exceto de malha": [
+                { "code": "6203.22.00", "description": "Casacos, jaquetas, calças, jardineiras, bermudas e shorts de algodão" }
+            ],
+            "63. Outros artefatos têxteis confeccionados": [
+                { "code": "6307.90.90", "description": "Outros artefatos têxteis confeccionados" }
+            ],
+            "64. Calçados, polainas e artefatos semelhantes": [
+                { "code": "6403.99.90", "description": "Outros calçados com sola exterior de couro natural ou couro reconstituído" },
+                { "code": "6404.11.00", "description": "Calçados de esporte, de tênis, de basquetebol" }
+            ],
+            "65. Chapéus e outros artefatos de uso semelhante": [
+                { "code": "6505.00.10", "description": "Chapéus de palha, feltro ou outras matérias" }
+            ],
+            "66. Guarda-chuvas, guarda-sóis, bengalas": [
+                { "code": "6601.91.10", "description": "Guarda-chuvas de cabo telescópico" }
+            ],
+            "67. Penas e penugem preparadas": [
+                { "code": "6701.00.00", "description": "Peles com pelo e suas partes, com pelo" }
+            ],
+            "68. Obras de pedra, gesso, cimento": [
+                { "code": "6810.19.00", "description": "Outras obras de cimento, betão ou pedra artificial" }
+            ],
+            "69. Produtos cerâmicos": [
+                { "code": "6914.90.00", "description": "Outros artefatos de cerâmica" },
+                { "code": "6907.21.00", "description": "Ladrilhos e lajes de cerâmica, para pavimentação ou revestimento" }
+            ],
+            "70. Vidro e suas obras": [
+                { "code": "7013.99.00", "description": "Outros artigos de vidro para a mesa, cozinha, toucador, etc." },
+                { "code": "7019.52.00", "description": "Tecidos de fibras de vidro" }
+            ],
+            "71. Pérolas, pedras preciosas, metais preciosos": [
+                { "code": "7101.21.00", "description": "Pérolas cultivadas, não trabalhadas, em bruto" },
+                { "code": "7102.10.00", "description": "Diamantes não montados nem engastados" }
+            ],
+            "72. Ferro fundido, ferro e aço": [
+                { "code": "7210.49.10", "description": "Chapas e tiras de ferro ou aço, de espessura inferior a 3 mm" }
+            ],
+            "73. Obras de ferro fundido, ferro ou aço": [
+                { "code": "7308.90.90", "description": "Outras obras de ferro ou aço" },
+                { "code": "7323.93.00", "description": "Utensílios de mesa, de cozinha e outros artigos de uso doméstico de aço inoxidável" }
+            ],
+            "74. Cobre e suas obras": [
+                { "code": "7411.10.10", "description": "Tubos de cobre refinado" }
+            ],
+            "75. Níquel e suas obras": [
+                { "code": "7508.90.00", "description": "Outras obras de níquel" }
+            ],
+            "76. Alumínio e suas obras": [
+                { "code": "7606.11.90", "description": "Outras chapas e tiras de alumínio, não ligadas" }
+            ],
+            "77. Não alocado": [
+                { "code": "7701.00.00", "description": "Capítulo não utilizado" }
+            ],
+            "78. Chumbo e suas obras": [
+                { "code": "7806.00.00", "description": "Outras obras de chumbo" }
+            ],
+            "79. Zinco e suas obras": [
+                { "code": "7901.11.10", "description": "Zinco não ligado, com um teor de zinco igual ou superior a 99,99 %" }
+            ],
+            "80. Estanho e suas obras": [
+                { "code": "8003.00.00", "description": "Barras, perfis e fios de estanho" }
+            ],
+            "81. Outros metais comuns": [
+                { "code": "8101.10.00", "description": "Tungstênio em pó" }
+            ],
+            "82. Ferramentas, artefatos de cutelaria": [
+                { "code": "8205.59.00", "description": "Outras ferramentas manuais" }
+            ],
+            "83. Obras diversas de metais comuns": [
+                { "code": "8302.42.00", "description": "Fechaduras e ferrolhos para móveis" }
+            ],
+            "84. Reatores nucleares, caldeiras, máquinas": [
+                { "code": "8471.50.10", "description": "Unidades de processamento, de pequeno porte" },
+                { "code": "8471.60.52", "description": "Mouse" }
+            ],
+            "85. Máquinas, aparelhos e material elétrico": [
+                { "code": "8518.29.90", "description": "Outros alto-falantes de uso profissional" },
+                { "code": "8518.30.00", "description": "Fones de ouvido e microfones" }
+            ],
+            "86. Veículos e material para vias férreas": [
+                { "code": "8607.19.00", "description": "Outras partes de locomotivas" }
+            ],
+            "87. Veículos automóveis, tratores, ciclos": [
+                { "code": "8708.99.90", "description": "Outras partes e acessórios de veículos automóveis" },
+                { "code": "8703.23.10", "description": "Automóveis de passageiros de cilindrada superior a 1500 cm³" }
+            ],
+            "88. Aeronaves, veículos espaciais": [
+                { "code": "8802.40.90", "description": "Outras aeronaves" }
+            ],
+            "89. Embarcações e estruturas flutuantes": [
+                { "code": "8903.91.00", "description": "Barcos a vela, com ou sem motor auxiliar" }
+            ],
+            "90. Instrumentos e aparelhos de óptica, etc.": [
+                { "code": "9005.80.00", "description": "Outros instrumentos e aparelhos astronômicos" },
+                { "code": "9018.90.99", "description": "Outros instrumentos e aparelhos de medicina, cirurgia, odontologia" }
+            ],
+            "91. Relógios de pulso, de bolso e outros relógios": [
+                { "code": "9102.11.10", "description": "Relógios de pulso de corda automática" }
+            ],
+            "92. Instrumentos musicais": [
+                { "code": "9207.90.00", "description": "Outros instrumentos musicais" }
+            ],
+            "93. Armas e munições": [
+                { "code": "9304.00.00", "description": "Outras armas" },
+                { "code": "9306.90.00", "description": "Outras munições, e seus cartuchos" }
+            ],
+            "94. Móveis; mobiliário médico-cirúrgico; colchões": [
+                { "code": "9403.60.00", "description": "Outros móveis de madeira" },
+                { "code": "9401.71.00", "description": "Assentos estofados de estrutura de madeira, não giratórios" }
+            ],
+            "95. Brinquedos, jogos e artigos para festas": [
+                { "code": "9503.00.99", "description": "Outros brinquedos" }
+            ],
+            "96. Obras diversas": [
+                { "code": "9603.29.00", "description": "Vassouras, escovas, pincéis e artefatos semelhantes de uso doméstico" },
+                { "code": "9608.10.00", "description": "Canetas esferográficas" }
+            ],
+            "97. Obras de arte, de coleção e antiguidades": [
+                { "code": "9701.10.00", "description": "Pinturas, desenhos e pastéis, feitos inteiramente à mão" },
+                { "code": "9703.00.00", "description": "Obras de arte originais de escultura ou de estatuária" }
+            ],
+            "98. Produtos importados ou exportados temporariamente": [
+                { "code": "9801.00.10", "description": "Artigos para uso em eventos culturais, exposições ou feiras" }
+            ],
+            "99. Mercadorias não especificadas": [
+                { "code": "9901.00.00", "description": "Mercadorias não especificadas ou não incluídas nas outras posições" }
+            ]
+        };
 
-    async function searchWithAI(productName) {
-      const loadingIndicator = document.getElementById('loading-indicator');
-      const aiPlaceholder = document.getElementById('ai-placeholder');
-      const aiResultsContentDiv = document.getElementById('ai-results-content');
+        // Variável global para armazenar os dados de NCM para a busca
+        let ncmDataGlobal = {};
 
-      if (!loadingIndicator || !aiResultsContentDiv) return;
+        // --- Configuração e Autenticação do Firebase ---
+        async function setupFirebase() {
+            try {
+                if (Object.keys(firebaseConfig).length > 0) {
+                    app = initializeApp(firebaseConfig);
+                    db = getFirestore(app);
+                    const auth = getAuth(app);
 
-      if (aiPlaceholder) aiPlaceholder.classList.add('hidden');
-      loadingIndicator.classList.remove('hidden');
-      aiResultsContentDiv.innerHTML = '';
+                    // Verifica se há um token inicial e autentica
+                    if (initialAuthToken) {
+                        await signInWithCustomToken(auth, initialAuthToken);
+                    } else {
+                        await signInAnonymously(auth);
+                    }
 
-      const prompt = `Considerando a base de dados de NCMs do Brasil, me forneça o código NCM mais provável e uma breve descrição para o seguinte produto: "${productName}". Se o produto for genérico, liste algumas opções. Responda em formato de lista simples com o código NCM e a descrição. Exemplo: "NCM: 1905.90.90 - Produtos de panificação."`;
+                    // Listener para o estado de autenticação
+                    onAuthStateChanged(auth, (user) => {
+                        if (user) {
+                            userId = user.uid;
+                            console.log("Usuário autenticado com UID:", userId);
+                            document.getElementById('user-id').textContent = userId;
+                            // Inicia a função de renderização após a autenticação
+                            renderNCMs();
+                        } else {
+                            console.error("Erro na autenticação. Tentando novamente...");
+                            document.getElementById('user-id').textContent = "Falha na autenticação.";
+                        }
+                    });
+                } else {
+                    console.error("Configuração do Firebase não encontrada. O app não funcionará corretamente com o Firestore.");
+                    // Renderiza com dados de exemplo se o Firebase não estiver configurado
+                    renderNCMsFromData(sampleNCMs);
+                }
+            } catch (error) {
+                console.error("Erro ao configurar o Firebase:", error);
+                renderNCMsFromData(sampleNCMs);
+            }
+        }
 
-      try {
-        const response = await fetch('https://api.openai.com/v1/chat/completions', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${OPENAI_API_KEY}`
-          },
-          body: JSON.stringify({
-            model: 'gpt-3.5-turbo',
-            messages: [{ role: 'user', content: prompt }],
-            temperature: 0.5
-          })
+        // --- Funções de Lógica da Aplicação ---
+        async function getOrCreateNCMs() {
+            const ncmCollectionRef = collection(db, 'artifacts', appId, 'public', 'data', 'ncm_data');
+            const ncmDocRef = doc(ncmCollectionRef, 'current_ncms');
+
+            try {
+                const docSnap = await getDoc(ncmDocRef);
+                if (docSnap.exists()) {
+                    console.log("Dados de NCM encontrados no Firestore.");
+                    return docSnap.data().data;
+                } else {
+                    console.log("Nenhum dado de NCM encontrado. Criando um documento com dados de exemplo.");
+                    await setDoc(ncmDocRef, { data: sampleNCMs });
+                    return sampleNCMs;
+                }
+            } catch (e) {
+                console.error("Erro ao buscar ou criar NCMs no Firestore:", e);
+                return sampleNCMs;
+            }
+        }
+
+        function renderNCMsFromData(data) {
+            ncmDataGlobal = data; // Armazena os dados em uma variável global para a busca
+            const categoriesContainer = document.getElementById('ncm-categories');
+            categoriesContainer.innerHTML = '';
+
+            // Obtém as chaves (capítulos) e ordena-as
+            const chapters = Object.keys(data).sort((a, b) => {
+                const numA = parseInt(a.split('.')[0]);
+                const numB = parseInt(b.split('.')[0]);
+                return numA - numB;
+            });
+
+            chapters.forEach(chapter => {
+                const chapterDiv = document.createElement('div');
+                chapterDiv.className = 'border-b border-gray-300 dark:border-gray-600 py-4';
+                chapterDiv.innerHTML = `
+                    <div class="flex justify-between items-center cursor-pointer group" onclick="toggleAccordion(this)">
+                        <h3 class="text-xl font-medium text-indigo-600 dark:text-indigo-400 group-hover:underline">${chapter}</h3>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-chevron-down transform transition-transform duration-200 group-hover:rotate-180"><path d="m6 9 6 6 6-6"/></svg>
+                    </div>
+                    <div class="accordion-content overflow-hidden max-h-0 transition-max-height duration-300 ease-in-out">
+                        <div class="mt-4 pl-4 border-l-2 border-gray-300 dark:border-gray-600">
+                            <ul class="ai-result-list mt-2 space-y-2">
+                                ${data[chapter].map(ncm => `
+                                    <li class="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg shadow-sm">
+                                        <div class="flex flex-col md:flex-row md:items-center justify-between gap-2">
+                                            <p class="text-gray-600 dark:text-gray-300 break-words">
+                                                <strong class="text-indigo-600 dark:text-indigo-400">${ncm.code}</strong> - ${ncm.description}
+                                            </p>
+                                            <div class="flex items-center gap-2 mt-2 md:mt-0">
+                                                <button class="copy-button bg-gray-200 dark:bg-gray-600 text-gray-800 dark:text-gray-200 text-xs font-semibold py-2 px-4 rounded-full hover:bg-gray-300 dark:hover:bg-gray-500 transition-colors duration-300 whitespace-nowrap" onclick="copyNcmCode(event, '${ncm.code}')">
+                                                    Copiar
+                                                </button>
+                                                <button class="bg-purple-600 text-white text-xs font-semibold py-2 px-4 rounded-full hover:bg-purple-700 transition-colors duration-300 whitespace-nowrap" onclick="getNcmDetailsWithIA(event, '${ncm.code}', '${ncm.description}')">
+                                                    ✨ Detalhes com IA
+                                                </button>
+                                            </div>
+                                        </div>
+                                        <div id="details-${ncm.code}" class="details-content mt-4 text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 p-3 rounded-md border border-gray-200 dark:border-gray-600">
+                                            <!-- Conteúdo dos detalhes da IA será inserido aqui -->
+                                        </div>
+                                    </li>
+                                `).join('')}
+                            </ul>
+                        </div>
+                    </div>
+                `;
+                categoriesContainer.appendChild(chapterDiv);
+            });
+        }
+
+        async function renderNCMs() {
+             if (db) {
+                const ncmCollectionRef = collection(db, 'artifacts', appId, 'public', 'data', 'ncm_data');
+                const ncmDocRef = doc(ncmCollectionRef, 'current_ncms');
+
+                // Listener em tempo real usando onSnapshot
+                onSnapshot(ncmDocRef, (docSnap) => {
+                    if (docSnap.exists()) {
+                        const ncms = docSnap.data().data;
+                        renderNCMsFromData(ncms);
+                    } else {
+                        // Se o documento não existir, o criamos com os dados de exemplo
+                        setDoc(ncmDocRef, { data: sampleNCMs });
+                    }
+                }, (error) => {
+                    console.error("Erro ao buscar dados do Firestore:", error);
+                    renderNCMsFromData(sampleNCMs);
+                });
+            } else {
+                renderNCMsFromData(sampleNCMs);
+            }
+        }
+
+        window.toggleAccordion = function(element) {
+            const content = element.nextElementSibling;
+            if (content.style.maxHeight) {
+                content.style.maxHeight = null;
+            } else {
+                content.style.maxHeight = content.scrollHeight + "px";
+            }
+        };
+
+        // Função para copiar o código NCM sem os pontos
+        window.copyNcmCode = function(event, ncmCode) {
+            const ncmCodeWithoutDots = ncmCode.replace(/\./g, '');
+
+            // Cria um campo de texto temporário e o adiciona ao corpo
+            const tempInput = document.createElement('textarea');
+            tempInput.value = ncmCodeWithoutDots;
+            document.body.appendChild(tempInput);
+            
+            // Seleciona e copia o texto
+            tempInput.select();
+            document.execCommand('copy');
+            
+            // Remove o campo de texto temporário
+            document.body.removeChild(tempInput);
+            
+            // Feedback visual
+            const button = event.currentTarget;
+            const originalText = button.textContent;
+            button.textContent = 'Copiado!';
+            setTimeout(() => {
+                button.textContent = originalText;
+            }, 2000);
+        }
+
+        // Função para buscar NCMs usando a IA
+        async function searchWithAI(productName) {
+            const searchResultsDiv = document.getElementById('search-results');
+            searchResultsDiv.innerHTML = ''; // Limpa os resultados anteriores
+            
+            const loadingIndicator = document.createElement('div');
+            loadingIndicator.innerHTML = `
+                <div class="loading-container">
+                    <div class="dot-pulse"></div>
+                </div>
+            `;
+            searchResultsDiv.appendChild(loadingIndicator);
+            
+            const prompt = `Considerando a base de dados de NCMs do Brasil, me forneça o código NCM mais provável e uma breve descrição para o seguinte produto: "${productName}". Se o produto for genérico, liste algumas opções. Responda em formato de lista simples com o código NCM e a descrição. Exemplo: "NCM: 1905.90.90 - Produtos de panificação."`;
+            
+            try {
+                const chatHistory = [];
+                chatHistory.push({ role: "user", parts: [{ text: prompt }] });
+                const payload = { contents: chatHistory };
+                const apiKey = "AIzaSyAgjcZ54zXIC8jkgpzquVMTtLws-L7JXxw"; // ** COLOQUE SUA CHAVE AQUI **
+                const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
+
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                if (!response.ok) {
+                    throw new Error(`Erro de HTTP! status: ${response.status}`);
+                }
+
+                const result = await response.json();
+                const text = result?.candidates?.[0]?.content?.parts?.[0]?.text;
+                
+                loadingIndicator.remove(); // Remove o indicador de carregamento
+
+                if (text) {
+                    const results = text.split('\n');
+                    let resultsHtml = `<p class="font-semibold text-lg text-gray-800 dark:text-gray-200">Resultados da IA:</p>`;
+                    results.forEach(line => {
+                        const match = line.match(/NCM: ([\d.]+) - (.+)/);
+                        if (match) {
+                            const ncmCode = match[1];
+                            const description = match[2];
+                            resultsHtml += `
+                                <div class="flex flex-col md:flex-row md:items-center justify-between p-2 mt-2 rounded-lg bg-gray-50 dark:bg-gray-700">
+                                    <p class="text-gray-600 dark:text-gray-300">
+                                        <strong>${ncmCode}</strong> - ${description}
+                                    </p>
+                                    <button class="copy-button bg-gray-200 dark:bg-gray-600 text-gray-800 dark:text-gray-200 text-xs font-semibold py-1 px-3 mt-2 md:mt-0 rounded-full hover:bg-gray-300 dark:hover:bg-gray-500 transition-colors duration-300" onclick="copyNcmCode(event, '${ncmCode}')">
+                                        Copiar
+                                    </button>
+                                </div>
+                            `;
+                        }
+                    });
+                    searchResultsDiv.innerHTML = resultsHtml;
+                } else {
+                    searchResultsDiv.innerHTML = `<p class="text-red-500">Não foi possível gerar uma resposta. Tente novamente.</p>`;
+                }
+            } catch (error) {
+                console.error("Erro ao chamar a API do Gemini:", error);
+                loadingIndicator.remove(); // Remove o indicador mesmo em caso de erro
+                searchResultsDiv.innerHTML = `<p class="text-red-500">Erro na comunicação com a IA. Por favor, tente novamente mais tarde.</p>`;
+            }
+        };
+
+        // Nova função para buscar detalhes do NCM com IA
+        window.getNcmDetailsWithIA = async function(event, code) {
+            event.stopPropagation(); // Evita que o acordeão seja fechado
+            const detailsDiv = document.getElementById(`details-${code}`);
+            
+            // Toggle do estado de abertura
+            const isOpened = detailsDiv.classList.contains('open');
+            if (isOpened) {
+                detailsDiv.classList.remove('open');
+                detailsDiv.innerHTML = '';
+                return;
+            }
+
+            detailsDiv.innerHTML = '<div class="loading-container"><div class="dot-pulse"></div></div>';
+            detailsDiv.classList.add('open');
+
+            const prompt = `Forneça uma explicação detalhada e completa da NCM ${code}. Inclua exemplos de produtos comuns que se encaixam nesta classificação. Formate a resposta em parágrafos de texto simples.`;
+
+            try {
+                const chatHistory = [];
+                chatHistory.push({ role: "user", parts: [{ text: prompt }] });
+                const payload = { contents: chatHistory };
+                const apiKey = "AIzaSyAgjcZ54zXIC8jkgpzquVMTtLws-L7JXxw"; // ** COLOQUE SUA CHAVE AQUI **
+                const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
+
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                if (!response.ok) {
+                    throw new Error(`Erro de HTTP! status: ${response.status}`);
+                }
+
+                const result = await response.json();
+                const text = result?.candidates?.[0]?.content?.parts?.[0]?.text;
+
+                if (text) {
+                    detailsDiv.innerHTML = `<p>${text.replace(/\n/g, '<br><br>')}</p>`;
+                } else {
+                    detailsDiv.innerHTML = `<p class="text-red-500">Não foi possível obter detalhes. Tente novamente.</p>`;
+                }
+            } catch (error) {
+                console.error("Erro ao chamar a API do Gemini para detalhes:", error);
+                detailsDiv.innerHTML = `<p class="text-red-500">Erro na comunicação com a IA. Por favor, tente novamente mais tarde.</p>`;
+            }
+        }
+
+        // --- Event Listeners e Inicialização ---
+        const searchButtonAI = document.getElementById('search-button-ai');
+        if (searchButtonAI) {
+            searchButtonAI.addEventListener('click', () => {
+                const productName = document.getElementById('product-input').value;
+                if (productName.trim() !== '') {
+                    searchWithAI(productName);
+                }
+            });
+        }
+
+        document.getElementById('product-input').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                const searchButtonAI = document.getElementById('search-button-ai');
+                if (searchButtonAI) {
+                    searchButtonAI.click();
+                }
+            }
         });
 
-        const data = await response.json();
-
-        if (!data || !data.choices || !data.choices.length) {
-          throw new Error("Resposta inesperada da OpenAI.");
+        // Chama as funções de inicialização diretamente
+        if (typeof lucide !== 'undefined') {
+            lucide.createIcons();
         }
-
-        const text = data.choices[0].message.content;
-
-        if (text) {
-          const results = text.split('\n');
-          let resultsHtml = `<p class="font-semibold text-lg text-gray-800 dark:text-gray-200">Resultados da IA:</p>`;
-          results.forEach(line => {
-            const match = line.match(/NCM: ([\d.]+) - (.+)/);
-            if (match) {
-              const ncmCode = match[1];
-              const description = match[2];
-              resultsHtml += `
-                <div class="flex flex-col md:flex-row md:items-center justify-between p-2 mt-2 rounded-lg bg-gray-50 dark:bg-gray-700">
-                  <p class="text-gray-600 dark:text-gray-300"><strong>${ncmCode}</strong> - ${description}</p>
-                  <button class="copy-button bg-gray-200 dark:bg-gray-600 text-gray-800 dark:text-gray-200 text-xs font-semibold py-1 px-3 mt-2 md:mt-0 rounded-full hover:bg-gray-300 dark:hover:bg-gray-500 transition-colors duration-300" onclick="copyNcmCode(event, '${ncmCode}')">
-                    Copiar
-                  </button>
-                </div>
-              `;
-            }
-          });
-          aiResultsContentDiv.innerHTML = resultsHtml;
-        } else {
-          aiResultsContentDiv.innerHTML = `<p class="text-red-500">Não foi possível gerar uma resposta. Tente novamente.</p>`;
-        }
-      } catch (error) {
-        console.error("Erro ao chamar a API da OpenAI:", error);
-        aiResultsContentDiv.innerHTML = `<p class="text-red-500">Erro na comunicação com a IA. Por favor, tente novamente mais tarde.</p>`;
-      } finally {
-        loadingIndicator.classList.add('hidden');
-      }
-    }
-
-    function copyNcmCode(event, code) {
-      navigator.clipboard.writeText(code);
-      event.target.textContent = 'Copiado!';
-      setTimeout(() => {
-        event.target.textContent = 'Copiar';
-      }, 2000);
-    }
-  </script>
+        setupFirebase();
+    </script>
 </body>
 </html>
